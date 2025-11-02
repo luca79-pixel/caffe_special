@@ -1,0 +1,27 @@
+name: Aggiungi Prenotazione Caffè
+
+on:
+  repository_dispatch:
+    types: [add_booking]
+
+jobs:
+  add_booking:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Aggiungi nuova prenotazione al file JSON
+        run: |
+          # Prende i dati esistenti, se il file non esiste lo crea
+          jq '. += [${{ toJSON(github.event.client_payload) }}]' bookings.json > temp.json || echo '[${{ toJSON(github.event.client_payload) }}]' > temp.json
+          mv temp.json bookings.json
+
+      - name: Commit e Push delle modifiche
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "☕ Nuova prenotazione da ${{ github.event.client_payload.teacher }}"
+          file_pattern: bookings.json
+          commit_user_name: Prenotazioni Bot
+          commit_user_email: actions@github.com
+          commit_author: Prenotazioni Bot <actions@github.com>
