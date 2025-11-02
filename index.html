@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prenotazione Caffè Docenti</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f6f8fa;
+            color: #24292e;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 10px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        input, select, button {
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 6px;
+            border: 1px solid #d1d5da;
+        }
+        button {
+            background-color: #2ea44f;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #2c974b;
+        }
+        #bookingsList {
+            margin-top: 20px;
+            padding: 0;
+            list-style-type: none;
+        }
+        #bookingsList li {
+            background-color: #f1f8ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border-left: 5px solid #0366d6;
+        }
+        .loading, .message {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #586069;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>☕ Prenotazione Caffè Docenti</h1>
+
+    <h2>Nuova Prenotazione</h2>
+    <form id="bookingForm">
+        <label for="teacherName">Nome Docente:</label>
+        <input type="text" id="teacherName" placeholder="Es. Prof. Rossi" required>
+
+        <label for="coffeeType">Tipo di Caffè:</label>
+        <select id="coffeeType" required>
+            <option value="Espresso">Espresso</option>
+            <option value="Macchiato">Macchiato</option>
+            <option value="Decaffeinato">Decaffeinato</option>
+            <option value="Orzo">Orzo</option>
+            <option value="Ginseng">Ginseng</option>
+        </select>
+
+        <button type="submit">Prenota il mio caffè!</button>
+    </form>
+    <div id="responseMessage" class="message" style="display:none;"></div>
+
+    <h2>Prenotazioni di Oggi</h2>
+    <ul id="bookingsList">
+        <div class="loading">Caricamento prenotazioni...</div>
+    </ul>
+</div>
+
+<script>
+    // Configurazione - MODIFICA QUESTI VALORI
+    const GITHUB_REPO_OWNER = 'TUO_NOME_UTENTE_GITHUB';
+    const GITHUB_REPO_NAME = 'NOME_DEL_TUO_REPOSITORY';
+    const GITHUB_PAT = 'IL_TUO_PERSONAL_ACCESS_TOKEN'; // Necessario solo per inviare la prenotazione
+
+    const bookingsFileUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/bookings.json`;
+    const dispatchUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/dispatches`;
+
+    // Funzione per caricare le prenotazioni
+    async function fetchBookings() {
+        const list = document.getElementById('bookingsList');
+        try {
+            const response = await fetch(bookingsFileUrl, {
+                headers: {
+                    'Accept': 'application/vnd.github.v3.raw'
+                },
+                cache: 'no-cache' // Per avere sempre i dati aggiornati
+            });
+            
+            if (!response.ok) {
+                if(response.status === 404) {
+                     list.innerHTML = '<li>Nessuna prenotazione ancora. Sii il primo!</li>';
+                     return;
+                }
+                throw new Error(`Errore nel caricamento: ${response.statusText}`);
+            }
+
+            const bookings = await response.json();
+            list.innerHTML = ''; // Pulisce la lista
+
+            if (bookings.length === 0) {
+                list.innerHTML = '<li>Nessuna prenotazione ancora. Sii il primo!</li>';
+            } else {
+                bookings.forEach(booking => {
+                    const item = document.createElement('li');
+                    item.textContent = `${booking.teacher} ha prenotato un caffè ${booking.coffee}.`;
+                    list.appendChild(item);
+                });
+            }
+        } catch (error) {
+            console.error('Errore:', error);
+            list.innerHTML = '<li style="background-color: #ffeef0; border-left-color: #d73a49;">Impossibile caricare le prenotazioni.</li>';
+        }
+    }
+
+    // Gestione dell'invio del modulo
+    document.getElementById('bookingForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const teacherName = document.getElementById('teacherName').value;
+        const coffeeType = document.getElementById('coffeeType').value;
+        const responseMessage = document.getElementById('responseMessage');
+
+        const bookingData = {
+            teacher: teacherName,
+            coffee: coffeeType,
+            timestamp: new Date().toISOString()
+        };
+
+        responseMessage.textContent = 'Invio della prenotazione in corso...';
+        responseMessage.style.display = 'block';
+        responseMessage.style.color = '#0366d6';
+
+        try {
+            const response = await fetch(dispatchUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${GITHUB_PAT}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    event_type: 'add_booking',
+                    client_payload: bookingData
+                })
+            });
+
+            if (response.status === 204) {
+                responseMessage.textContent = 'Prenotazione inviata con successo! Sarà visibile a breve.';
+                responseMessage.style.color = '#2ea44f';
+                document.getElementById('bookingForm').reset();
+                setTimeout(fetchBookings, 3000); // Ricarica le prenotazioni dopo 3 secondi
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Qualcosa è andato storto.');
+            }
+        } catch (error) {
+            console.error('Errore nell\'invio:', error);
+            responseMessage.textContent = `Errore: ${error.message}. Controlla che il PAT sia corretto.`;
+            responseMessage.style.color = '#d73a49';
+        }
+    });
+
+    // Carica le prenotazioni all'avvio
+    fetchBookings();
+</script>
+
+</body>
+</html>
